@@ -1,0 +1,145 @@
+<api:script xmlns:api="http://apiscript.com/ns?v1" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <!-- See Column Definitions to specify column behavior and use XPaths to extract column values from JSON. -->
+  <api:info title="DeviceData" desc="Generated schema file." xmlns:other="http://apiscript.com/ns?v1">
+
+    <attr name="ModCnt"    xs:type="integer"  readonly="false"              other:xPath="/json/contents/mod/cnt"    />
+    <attr name="ModData"   xs:type="string"   readonly="false"              other:xPath="/json/contents/mod/data"   />
+    <attr name="ModDevEUI" xs:type="string"   readonly="false"              other:xPath="/json/contents/mod/devEUI" />
+    <attr name="ModDr"     xs:type="string"   readonly="false"              other:xPath="/json/contents/mod/dr"     />
+    <attr name="ModFq"     xs:type="double"   readonly="false"              other:xPath="/json/contents/mod/fq"     />
+    <attr name="ModMt"     xs:type="string"   readonly="false"              other:xPath="/json/contents/mod/mt"     />
+    <attr name="ModPort"   xs:type="integer"  readonly="false"              other:xPath="/json/contents/mod/port"   />
+
+    <attr name="Time"       xs:type="datetime"  readonly="false"              other:xPath="/json/contents/time"       />
+
+    <attr name="Version"        xs:type="string"  readonly="false"                     />
+    <attr name="DeviceType"     xs:type="string"  readonly="false"                     />
+    <attr name="ReportType"     xs:type="string"  readonly="false"                     />
+    <attr name="Voltage"        xs:type="string"  readonly="false"                     />
+    <attr name="Temperature"    xs:type="decimal"  readonly="false"                     />
+    <attr name="Humidity"       xs:type="decimal"  readonly="false"                     />
+
+    <attr name="GW"         xs:type="string"   readonly="false"              other:xPath="/json/contents/gw"         />
+
+    <input name="DevEUI"     xs:type="string"    readonly="false"                       />
+    <input name="To"         xs:type="datetime"  readonly="false"                       />
+    <input name="From"       xs:type="datetime"  readonly="false"                       />
+
+  </api:info>
+
+  <api:set attr="SenseWayUser" value="[_connection.SenseWayUser]"/>
+  <api:set attr="SenseWayPassword" value="[_connection.SenseWayPassword]"/>
+  
+  <!-- The GET method corresponds to SELECT. Here you can override the default processing of the SELECT statement. The results of processing are pushed to the schema's output. See SELECT Execution for more information. -->
+
+  <!--TODO: ApiToken の取得処理を加えて完成-->
+  <api:script method="GET">
+
+    <!-- Auth Request -->
+    <api:set attr="AuthRequestIn.method" value="POST"/>
+
+    <api:set attr="AuthRequestIn.URI" value="https://console.senseway.net/api/login"/>
+    <api:set attr="AuthRequestIn.data">
+    {
+      "username" : "[SenseWayUser]",
+      "password" : "[SenseWayPassword]"
+    }
+    </api:set>
+
+    <rsb:set attr="AuthRequestIn.ElementMapPath#1" value="/api_token" />
+    <rsb:set attr="AuthRequestIn.ElementMapName#1" value="api_token" />
+    <rsb:set attr="AuthRequestIn.RepeatElement"    value="/"/>
+    <rsb:set attr="AuthRequestIn.EnablePaging" value="True" />  
+
+    <api:set attr="AuthRequestIn.ContentType"   value="application/json"/>
+    <api:set attr="AuthRequestIn.header:name"   value="accept"/>
+    <api:set attr="AuthRequestIn.header:value"  value="application/json"/>
+
+    <api:call op="jsonproviderGet" in="AuthRequestIn" out="AuthRequestOut">
+
+      <api:set attr="ApiToken" value="[AuthRequestOut.api_token]"/>
+
+      <!-- Main Request -->
+
+      <!-- Defult value is CData Test Device if Where querey does not specifiy-->
+
+      <api:exists attr="_connection.DevEUI">
+        <api:set attr="DevEUI" value="[_connection.DevEUI]"/>
+      </api:exists>
+
+      <api:exists attr="_input.DevEUI">
+        <api:set attr="DevEUI" value="[_input.DevEUI]"/>
+      </api:exists>
+
+      <api:set attr="DevEUI" value="[DevEUI | def('00137a100000814d')]"/>
+
+      <api:set attr="MainRequestIn.URI" value="https://console.senseway.net/api/data/[DevEUI]?limit=0" />
+
+      <api:exists attr="_input.From">
+        <api:set attr="URI" value="[URI]&from=[_input.From]" />
+      </api:exists>
+
+      <api:exists attr="_input.To">
+        <api:set attr="URI" value="[URI]&to=[_input.To]" />
+      </api:exists>
+
+      <api:set attr="MainRequestIn.method" value="GET"/>
+
+      <api:set attr="MainRequestIn.DataModel" value="DOCUMENT" />
+      <api:set attr="MainRequestIn.JSONPath" value="$.contents" />
+
+      <api:set attr="MainRequestIn.header:name" value="accept"/>
+      <api:set attr="MainRequestIn.header:value" value=" application/json"/>
+
+      <api:set attr="MainRequestIn.header:name#2" value="Authorization"/>
+      <api:set attr="MainRequestIn.header:value#2" value="Bearer [ApiToken]"/>
+
+      <api:call op="jsonproviderGet" in="MainRequestIn" out="MainRequestOut">
+
+        <api:set attr="MainRequestOut.Time" value="[MainRequestOut.Time | todate('yyyy-MM-dd HH:mm:ss','UNIX')]"/>
+
+        <api:set attr="MainRequestOut.Version"     value="[MainRequestOut.ModData | substring(0,2)]"/>
+        <api:set attr="MainRequestOut.DeviceType"  value="[MainRequestOut.ModData | substring(2,2)]"/>
+        <api:set attr="MainRequestOut.ReportType"  value="[MainRequestOut.ModData | substring(4,2)]"/>
+        <api:set attr="MainRequestOut.Voltage"     value="[MainRequestOut.ModData | substring(6,2)]"/>
+        <api:set attr="MainRequestOut.Temperature" value="[MainRequestOut.ModData | substring(8,4) | toradix(10,16) | div(100)]"/>
+        <api:set attr="MainRequestOut.Humidity"    value="[MainRequestOut.ModData | substring(12,4) | toradix(10,16) | div(100)]"/>
+
+        <api:push/>
+      </api:call>
+      <!-- Main Request -->
+
+    </api:call>
+    <!-- Auth Request -->
+
+  </api:script>
+
+  <!-- To add support for INSERTS please see the INSERT Execution page within the help for further information and examples. -->
+  <api:script method="POST">
+    <api:set attr="method" value="POST"/>
+    <api:call op="jsonproviderGet">
+      <api:throw code="500" desc="Inserts are not currently supported."/>
+      <api:push/>
+    </api:call>
+  </api:script>
+
+  <!-- To add support for UPDATES please see the UPDATE Execution page within the help for further information and examples. -->
+  <api:script method="MERGE">
+    <api:set attr="method" value="PUT"/>
+    <api:call op="jsonproviderGet">
+      <api:throw code="500" desc="Updates are not currently supported."/>
+      <api:push/>
+    </api:call>
+  </api:script>
+
+  <!-- To add support for DELETES please see the DELETE Execution page within the help for further information and examples. -->
+  <api:script method="DELETE">
+    <api:set attr="method" value="DELETE"/>
+    <api:call op="jsonproviderGet">
+      <api:throw code="500" desc="Deletes are not currently supported."/>
+      <api:push/>
+    </api:call>
+  </api:script>
+
+</api:script>
